@@ -1,0 +1,28 @@
+{
+    "name": "soluzione-software/laravel-translations",
+    "require": {
+        "php": ">=7.1.0",
+        "ext-json": "*",
+        "illuminate/config": "^6.0|^7.0|^8.0",
+        "illuminate/console": "^6.0|^7.0|^8.0",
+        "illuminate/container": "^6.0|^7.0|^8.0",
+        "illuminate/filesystem": "^6.0|^7.0|^8.0",
+        "illuminate/support": "^6.0|^7.0|^8.0",
+        "illuminate/translation": "^6.0|^7.0|^8.0"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "SoluzioneSoftware\\LaravelTranslations\\": "src"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SoluzioneSoftware\\LaravelTranslations\\ServiceProvider"
+            ]
+        }
+    }
+}
