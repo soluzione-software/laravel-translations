@@ -56,7 +56,7 @@ class Locales extends Command
     private function listAction()
     {
         $locales = Translations::getLocales();
-        $this->output->writeln(implode(' ', $locales));
+        $this->output->writeln(implode(' ', $locales->all()));
     }
 
     private function addAction()

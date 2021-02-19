@@ -6,6 +6,7 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
@@ -45,49 +46,48 @@ class Manager
         if (!$this->hasLocale($locale)) {
             return null;
         }
-
-        return Arr::get(
-            $this->getTranslations($locale),
-            $this->getKey($key, $namespace)
-        );
+        $translation = $this
+            ->getTranslations($locale)
+            ->first(
+                function (array $item) use ($namespace, $key) {
+                    return $item['key'] === $key && $item['namespace'] === $namespace;
+                }
+            );
+        return $translation ? $translation['value'] : null;
     }
 
     protected function hasLocale(string $locale): bool
     {
-        return in_array($locale, $this->getLocales());
+        return $this->getLocales()->contains($locale);
     }
 
-    public function getLocales(): array
+    public function getLocales(): Collection
     {
-        return array_map(function (string $file) {
-            return str_replace('.json', '', Arr::last(explode(DIRECTORY_SEPARATOR, $file)));
-        }, $this->disk->allFiles($this->path));
+        return collect($this->disk->allFiles($this->path))
+            ->map(function (string $file) {
+                return str_replace('.json', '', Arr::last(explode(DIRECTORY_SEPARATOR, $file)));
+            });
     }
 
     /**
      * @param  string  $locale
-     * @return array
+     * @return Collection
      * @throws InvalidArgumentException if given locale does not exists
      * @noinspection PhpUnhandledExceptionInspection
      * @noinspection PhpDocMissingThrowsInspection
      */
-    public function getTranslations(string $locale)
+    public function getTranslations(string $locale): Collection
     {
-        if (!$this->disk->exists($this->getPath($locale))) {
+        if (!$this->hasLocale($locale)) {
             throw new InvalidArgumentException("Locale $locale does not exists");
         }
 
-        return json_decode($this->disk->get($this->getPath($locale)), true);
+        return collect(array_values(json_decode($this->disk->get($this->getPath($locale)), true)));
     }
 
     protected function getPath(string $locale): string
     {
         return $this->path.DIRECTORY_SEPARATOR."$locale.json";
-    }
-
-    protected function getKey(string $key, ?string $namespace): string
-    {
-        return ($namespace ? "$namespace::" : '').$key;
     }
 
     /**
@@ -101,20 +101,35 @@ class Manager
             throw new InvalidArgumentException("Locale $locale already exists");
         }
 
-        $this->save($locale, $initialize ? $this->getDefaultTranslations($locale) : []);
+        $this->save($locale, $initialize ? $this->getDefaultTranslations($locale) : collect());
     }
 
-    protected function save(string $locale, array $translations)
+    protected function save(string $locale, Collection $translations)
     {
-        $this->disk->put($this->getPath($locale), json_encode($translations));
+        $this->disk->put($this->getPath($locale), json_encode($translations->toArray()));
     }
 
-    public function getDefaultTranslations(string $locale): array
+    public function getDefaultTranslations(string $locale): Collection
     {
-        return array_merge(
+        $translations = array_merge(
             $this->getDefaultTranslationsForLocale(Config::get('app.fallback_locale')),
             $this->getDefaultTranslationsForLocale($locale)
         );
+
+        array_walk(
+            $translations,
+            function (&$value, string $key) {
+                $namespaceKey = explode('::', $key, 2);
+
+                $value = [
+                    'namespace' => count($namespaceKey) === 1 ? null : $namespaceKey[0],
+                    'key' => Arr::last($namespaceKey),
+                    'value' => $value,
+                ];
+            }
+        );
+
+        return collect(array_values($translations));
     }
 
     protected function getDefaultTranslationsForLocale(string $locale): array
@@ -173,7 +188,12 @@ class Manager
     {
         $translations = $this->getTranslations($locale);
 
-        $translations[$this->getKey($key, $namespace)] = $value;
+        $translations = $translations->map(function (array $translation) use ($value, $key, $namespace) {
+            if ($translation['key'] === $key && $translation['namespace'] === $namespace) {
+                $translation['value'] = $value;
+            }
+            return $translation;
+        });
 
         $this->save($locale, $translations);
     }
@@ -186,14 +206,10 @@ class Manager
      */
     public function removeTranslation(string $locale, string $key, ?string $namespace = null)
     {
-        $key = $this->getKey($key, $namespace);
-        $translations = array_filter(
-            $this->getTranslations($locale),
-            function (string $k) use ($key, $namespace) {
-                return $k !== $key;
-            },
-            ARRAY_FILTER_USE_KEY
-        );
+        $translations = $this->getTranslations($locale)
+            ->filter(function (array $item) use ($key, $namespace) {
+                return $item['key'] !== $key || $item['namespace'] !== $namespace;
+            });
 
         $this->save($locale, $translations);
     }
