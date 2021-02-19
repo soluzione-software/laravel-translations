@@ -49,21 +49,6 @@ class Translator extends BaseTranslator implements TranslatorContract
             : $this->translator->get($key, $replace = [], $locale);
     }
 
-    public function getLocale()
-    {
-        return $this->translator->getLocale();
-    }
-
-    public function choice($key, $number, array $replace = [], $locale = null)
-    {
-        return $this->translator->choice($key, $number, $replace, $locale);
-    }
-
-    public function setLocale($locale)
-    {
-        $this->translator->setLocale($locale);
-    }
-
     /**
      * Dynamically handle calls to the class.
      *
