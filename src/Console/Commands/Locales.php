@@ -15,8 +15,9 @@ class Locales extends Command
      * @var string
      */
     protected $signature = 'translations:locales 
-                            {action : The action to perform(list, add, remove)}
-                            {locale? : Required for: add, remove}
+                            {action : The action to perform(list, add, remove, import, export)}
+                            {locale? : Required for: add, remove, import, export}
+                            {file? : Required for: import, export}
                             {--initialize : Whether the locale should be initialized with default values. Only for add action}';
 
     /**
@@ -48,6 +49,10 @@ class Locales extends Command
             $this->addAction();
         } elseif ($action === 'remove') {
             $this->removeAction();
+        } elseif ($action === 'import') {
+            $this->importAction();
+        } elseif ($action === 'export') {
+            $this->exportAction();
         } else {
             throw new RuntimeException("$action is not a valid action");
         }
@@ -61,7 +66,7 @@ class Locales extends Command
 
     private function addAction()
     {
-        $locale = $this->getLocaleArgumentOrFail();
+        $locale = $this->getArgumentOrFail('locale');
         try {
             Translations::addLocale($locale, $this->option('initialize'));
         } catch (InvalidArgumentException $exception) {
@@ -70,22 +75,48 @@ class Locales extends Command
         $this->info("Locale $locale added.");
     }
 
-    private function getLocaleArgumentOrFail()
+    private function getArgumentOrFail(string $key)
     {
-        $locale = $this->argument('locale');
-        if (empty($locale)) {
-            throw new RuntimeException("<locale> is required");
+        $value = $this->argument($key);
+        if (empty($value)) {
+            throw new RuntimeException("<$key> is required");
         }
-        return $locale;
+        return $value;
     }
 
     private function removeAction()
     {
-        $locale = $this->getLocaleArgumentOrFail();
+        $locale = $this->getArgumentOrFail('locale');
         $confirmed = $this->confirm("All translations will be removed for '$locale' locale. Continue?");
         if ($confirmed) {
             Translations::removeLocale($locale);
             $this->info("Locale $locale removed.");
         }
+    }
+
+    private function importAction()
+    {
+        $locale = $this->getArgumentOrFail('locale');
+
+        try {
+            Translations::import($locale, $this->getArgumentOrFail('file'));
+        } catch (InvalidArgumentException $exception) {
+            throw new RuntimeException($exception->getMessage(), $exception->getCode());
+        }
+
+        $this->info("Locale $locale imported.");
+    }
+
+    private function exportAction()
+    {
+        $locale = $this->getArgumentOrFail('locale');
+
+        try {
+            Translations::export($locale, $this->getArgumentOrFail('file'));
+        } catch (InvalidArgumentException $exception) {
+            throw new RuntimeException($exception->getMessage(), $exception->getCode());
+        }
+
+        $this->info("Locale $locale exported.");
     }
 }

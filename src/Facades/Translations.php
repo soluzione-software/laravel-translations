@@ -14,6 +14,8 @@ use SoluzioneSoftware\LaravelTranslations\Manager;
  * @method static string|null getTranslation(string $locale, string $key, string|null $namespace = null)
  * @method static updateTranslation(string $locale, string $key, string $value, string|null $namespace = null)
  * @method static removeTranslation(string $locale, string $key, string|null $namespace = null)
+ * @method static import(string $locale, string $file)
+ * @method static export(string $locale, string $file)
  *
  * @see Manager
  */

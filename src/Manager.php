@@ -1,7 +1,15 @@
 <?php
 
+/**
+ * @noinspection PhpDocMissingThrowsInspection
+ * @noinspection PhpRedundantCatchClauseInspection
+ * @noinspection PhpUnhandledExceptionInspection
+ * @noinspection PhpUnused
+ */
+
 namespace SoluzioneSoftware\LaravelTranslations;
 
+use ErrorException;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Contracts\Translation\Loader;
@@ -73,8 +81,6 @@ class Manager
      * @param  string  $locale
      * @return Collection
      * @throws InvalidArgumentException if given locale does not exists
-     * @noinspection PhpUnhandledExceptionInspection
-     * @noinspection PhpDocMissingThrowsInspection
      */
     public function getTranslations(string $locale): Collection
     {
@@ -172,10 +178,36 @@ class Manager
 
     /**
      * @param  string  $locale
+     * @param  string  $file
+     * @throws InvalidArgumentException if given file is not readable
      */
-    public function removeLocale(string $locale)
+    public function import(string $locale, string $file)
     {
-        $this->disk->delete($this->getPath($locale));
+        try {
+            if (($handle = fopen($file, 'r')) === false) {
+                throw new InvalidArgumentException("$file is not readable");
+            }
+        } catch (ErrorException $e) {
+            throw new InvalidArgumentException("$file is not readable");
+        }
+
+        $translations = collect();
+        $count = 1;
+        while (($row = fgetcsv($handle)) !== false) {
+            if ($count > 1) {
+                $translations->push([
+                    'namespace' => $row[0],
+                    'key' => $row[1],
+                    'value' => $row[2],
+                ]);
+            }
+
+            $count++;
+        }
+
+        fclose($handle);
+
+        $this->save($locale, $translations);
     }
 
     /**
@@ -196,6 +228,34 @@ class Manager
         });
 
         $this->save($locale, $translations);
+    }
+
+    /**
+     * @param  string  $locale
+     * @param  string  $file
+     * @throws InvalidArgumentException if given file is not writable
+     */
+    public function export(string $locale, string $file)
+    {
+        if (($handle = fopen($file, 'w')) === false) {
+            throw new InvalidArgumentException("$file is not writable");
+        }
+
+        $keys = ['namespace', 'key', 'value'];
+        fputcsv($handle, $keys);
+        foreach ($this->getTranslations($locale) as $translation) {
+            fputcsv($handle, Arr::only($translation, $keys));
+        }
+
+        fclose($handle);
+    }
+
+    /**
+     * @param  string  $locale
+     */
+    public function removeLocale(string $locale)
+    {
+        $this->disk->delete($this->getPath($locale));
     }
 
     /**
