@@ -218,16 +218,41 @@ class Manager
      */
     public function updateTranslation(string $locale, string $key, string $value, ?string $namespace = null)
     {
-        $translations = $this->getTranslations($locale);
+        $translation = [
+            'namespace' => $namespace,
+            'key' => $key,
+            'value' => $value,
+        ];
 
-        $translations = $translations->map(function (array $translation) use ($value, $key, $namespace) {
-            if ($translation['key'] === $key && $translation['namespace'] === $namespace) {
-                $translation['value'] = $value;
-            }
-            return $translation;
-        });
+        $this->save(
+            $locale,
+            $this->mergeTranslations(
+                $this->getTranslations($locale),
+                collect([
+                    $translation,
+                ])
+            )
+        );
+    }
 
-        $this->save($locale, $translations);
+    protected function mergeTranslations(Collection ...$array): Collection
+    {
+        $merged = [];
+
+        foreach ($array as $translations) {
+            $translations
+                ->each(function (array $translation) use (&$merged) {
+                    $key = $this->getFullKey($translation['key'], $translation['namespace']);
+                    $merged[$key] = $translation;
+                });
+        }
+
+        return collect(array_values($merged));
+    }
+
+    protected function getFullKey(string $key, ?string $namespace = null): string
+    {
+        return (!empty($namespace) ? $namespace.'::' : '').$key;
     }
 
     /**
@@ -259,26 +284,6 @@ class Manager
                 $this->getTranslations($locale)
             )
         );
-    }
-
-    protected function mergeTranslations(Collection ...$array): Collection
-    {
-        $merged = [];
-
-        foreach ($array as $translations) {
-            $translations
-                ->each(function (array $translation) use (&$merged) {
-                    $key = $this->getFullKey($translation['key'], $translation['namespace']);
-                    $merged[$key] = $translation;
-                });
-        }
-
-        return collect(array_values($merged));
-    }
-
-    protected function getFullKey(string $key, ?string $namespace = null): string
-    {
-        return (!empty($namespace) ? $namespace.'::' : '').$key;
     }
 
     /**
