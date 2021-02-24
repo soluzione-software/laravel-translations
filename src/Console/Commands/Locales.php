@@ -15,8 +15,8 @@ class Locales extends Command
      * @var string
      */
     protected $signature = 'translations:locales 
-                            {action : The action to perform(list, add, remove, import, export)}
-                            {locale? : Required for: add, remove, import, export}
+                            {action : The action to perform(list, add, remove, sync, import, export)}
+                            {locale? : Required for: add, remove, sync, import, export}
                             {file? : Required for: import, export}
                             {--initialize : Whether the locale should be initialized with default values. Only for add action}';
 
@@ -49,6 +49,8 @@ class Locales extends Command
             $this->addAction();
         } elseif ($action === 'remove') {
             $this->removeAction();
+        } elseif ($action === 'sync') {
+            $this->syncAction();
         } elseif ($action === 'import') {
             $this->importAction();
         } elseif ($action === 'export') {
@@ -92,6 +94,13 @@ class Locales extends Command
             Translations::removeLocale($locale);
             $this->info("Locale $locale removed.");
         }
+    }
+
+    private function syncAction()
+    {
+        $locale = $this->getArgumentOrFail('locale');
+        Translations::sync($locale);
+        $this->info("Locale $locale synced.");
     }
 
     private function importAction()

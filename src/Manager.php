@@ -250,6 +250,37 @@ class Manager
         fclose($handle);
     }
 
+    public function sync(string $locale)
+    {
+        $this->save(
+            $locale,
+            $this->mergeTranslations(
+                $this->getDefaultTranslations($locale),
+                $this->getTranslations($locale)
+            )
+        );
+    }
+
+    protected function mergeTranslations(Collection ...$array): Collection
+    {
+        $merged = [];
+
+        foreach ($array as $translations) {
+            $translations
+                ->each(function (array $translation) use (&$merged) {
+                    $key = $this->getFullKey($translation['key'], $translation['namespace']);
+                    $merged[$key] = $translation;
+                });
+        }
+
+        return collect(array_values($merged));
+    }
+
+    protected function getFullKey(string $key, ?string $namespace = null): string
+    {
+        return (!empty($namespace) ? $namespace.'::' : '').$key;
+    }
+
     /**
      * @param  string  $locale
      */
