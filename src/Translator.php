@@ -33,6 +33,19 @@ class Translator extends BaseTranslator implements TranslatorContract
         return BaseTranslator::{$method}(...$parameters);
     }
 
+    /**
+     * Set the default locale.
+     *
+     * @param  string  $locale
+     * @return void
+     */
+    public function setLocale($locale)
+    {
+        parent::setLocale($locale);
+
+        $this->translator->setLocale($locale);
+    }
+
     public function get($key, array $replace = [], $locale = null, $fallback = true)
     {
         $namespaceKey = explode('::', $key, 2);
