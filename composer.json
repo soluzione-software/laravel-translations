@@ -3,12 +3,12 @@
     "require": {
         "php": ">=7.1.0",
         "ext-json": "*",
-        "illuminate/config": "5.8.*|^6.0|^7.0|^8.0",
-        "illuminate/console": "5.8.*|^6.0|^7.0|^8.0",
-        "illuminate/container": "5.8.*|^6.0|^7.0|^8.0",
-        "illuminate/filesystem": "5.8.*|^6.0|^7.0|^8.0",
-        "illuminate/support": "5.8.*|^6.0|^7.0|^8.0",
-        "illuminate/translation": "5.8.*|^6.0|^7.0|^8.0"
+        "illuminate/config": "5.8.*",
+        "illuminate/console": "5.8.*",
+        "illuminate/container": "5.8.*",
+        "illuminate/filesystem": "5.8.*",
+        "illuminate/support": "5.8.*",
+        "illuminate/translation": "5.8.*"
     },
     "config": {
         "sort-packages": true

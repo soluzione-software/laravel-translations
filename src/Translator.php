@@ -46,6 +46,15 @@ class Translator extends BaseTranslator implements TranslatorContract
         $this->translator->setLocale($locale);
     }
 
+    public function getFromJson($key, array $replace = [], $locale = null)
+    {
+        $translation = Translations::getTranslation($locale ?: $this->getLocale(), $key);
+
+        return $translation
+            ? $this->makeReplacements($translation, $replace)
+            : parent::getFromJson($key, $replace, $locale);
+    }
+
     public function get($key, array $replace = [], $locale = null, $fallback = true)
     {
         $namespaceKey = explode('::', $key, 2);
