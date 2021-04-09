@@ -1,5 +1,6 @@
 {
     "name": "soluzione-software/laravel-translations",
+    "description": "The package adds extra functionalities to Laravel's localization system.",
     "require": {
         "php": ">=7.1.0",
         "ext-json": "*",
