@@ -57,7 +57,7 @@ class Translator extends BaseTranslator implements TranslatorContract
             $namespace
         );
 
-        return $translation
+        return $translation !== null
             ? $this->makeReplacements($translation, $replace)
             : $this->translator->get($key, $replace, $locale);
     }
