@@ -63,6 +63,14 @@ class Translator extends BaseTranslator implements TranslatorContract
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function addLines(array $lines, $locale, $namespace = '*')
+    {
+        $this->translator->addLines($lines, $locale, $namespace);
+    }
+
+    /**
      * Dynamically handle calls to the class.
      *
      * @param  string  $method
