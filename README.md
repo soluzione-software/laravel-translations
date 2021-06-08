@@ -10,5 +10,5 @@ The package adds extra functionalities to Laravel's [localization system](https:
 ## Installation
 
 ```bash
-composer require soluzione-software/laravel-translations
+composer require soluzione-software/laravel-translations:0.5.*
 ```
