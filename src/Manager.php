@@ -358,9 +358,10 @@ class Manager
         while (($row = fgetcsv($handle)) !== false) {
             if ($count > 1) {
                 $translations->push([
-                    'namespace' => $row[0],
-                    'key' => $row[1],
-                    'value' => $row[2],
+                    'source' => $row[0],
+                    'namespace' => $row[1],
+                    'key' => $row[2],
+                    'value' => $row[3],
                 ]);
             }
 
