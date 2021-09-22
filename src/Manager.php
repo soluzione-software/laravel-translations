@@ -356,6 +356,10 @@ class Manager
         $translations = collect();
         $count = 1;
         while (($row = fgetcsv($handle)) !== false) {
+            if (count($row) !== 4) {
+                continue;
+            }
+
             if ($count > 1) {
                 $translations->push([
                     'source' => $row[0],
