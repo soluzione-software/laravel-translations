@@ -2,6 +2,7 @@
 
 namespace SoluzioneSoftware\LaravelTranslations;
 
+use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Contracts\Translation\Translator as TranslatorContract;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -18,6 +19,8 @@ class ServiceProvider extends BaseServiceProvider
     public function register()
     {
         $this->registerConfig();
+        $this->registerTranslationLoader();
+        $this->registerTranslationsManager();
         $this->registerTranslator();
     }
 
@@ -28,12 +31,24 @@ class ServiceProvider extends BaseServiceProvider
         );
     }
 
+    private function registerTranslationLoader()
+    {
+        $this->app->extend('translation.loader', function (Loader $service, $app) {
+            return new FileLoader($service, $app['files'], $app['path.lang']);
+        });
+    }
+
+    private function registerTranslationsManager()
+    {
+        $this->app->singleton(Manager::class, function ($app) {
+            return new Manager($app['path.lang']);
+        });
+    }
+
     private function registerTranslator()
     {
         $this->app->extend('translator', function (TranslatorContract $service, $app) {
-            $loader = $app['translation.loader'];
-
-            return new Translator($service, $loader);
+            return new Translator($service, $app['translation.loader']);
         });
     }
 

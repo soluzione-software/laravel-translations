@@ -15,38 +15,43 @@ use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Contracts\Translation\Loader;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use RuntimeException;
 
 class Manager
 {
+    const SOURCE_APP = 'app';
+    const SOURCE_VENDOR = 'vendor';
     /**
      * @var Filesystem
      */
     protected $disk;
-
     /**
      * @var string
      */
     protected $path;
-
     /**
-     * @var Loader
+     * @var Loader|FileLoader
      */
     protected $translationsLoader;
+    /**
+     * @var string
+     */
+    protected $langPath;
 
     /**
      * Manager constructor.
      */
-    public function __construct()
+    public function __construct(string $langPath)
     {
         $this->disk = Storage::disk(Config::get('translations.disk'));
         $this->path = Config::get('translations.path');
         /** @noinspection PhpUnhandledExceptionInspection */
         $this->translationsLoader = Container::getInstance()->make('translation.loader');
+        $this->langPath = $langPath;
     }
 
     public function getTranslation(string $locale, string $key, ?string $namespace = null): ?string
@@ -73,7 +78,7 @@ class Manager
     {
         return collect($this->disk->allFiles($this->path))
             ->map(function (string $file) {
-                return str_replace('.json', '', Arr::last(explode(DIRECTORY_SEPARATOR, $file)));
+                return str_replace('.json', '', Arr::last(explode('/', $file)));
             });
     }
 
@@ -93,7 +98,7 @@ class Manager
 
     protected function getPath(string $locale): string
     {
-        return $this->path.DIRECTORY_SEPARATOR."$locale.json";
+        return "$this->path/$locale.json";
     }
 
     /**
@@ -117,25 +122,34 @@ class Manager
 
     public function getDefaultTranslations(string $locale): Collection
     {
-        $translations = array_merge(
-            $this->getDefaultTranslationsForLocale(Config::get('app.fallback_locale')),
-            $this->getDefaultTranslationsForLocale($locale)
+        return $this->mergeTranslations(
+            collect($this->getDefaultTranslationsForLocale(Config::get('app.fallback_locale'))),
+            collect($this->getDefaultTranslationsForLocale($locale))
         );
+    }
 
-        array_walk(
-            $translations,
-            function (&$value, string $key) {
-                $namespaceKey = explode('::', $key, 2);
+    protected function mergeTranslations(Collection ...$array): Collection
+    {
+        $merged = [];
 
-                $value = [
-                    'namespace' => count($namespaceKey) === 1 ? null : $namespaceKey[0],
-                    'key' => Arr::last($namespaceKey),
-                    'value' => $value,
-                ];
-            }
-        );
+        foreach ($array as $translations) {
+            $translations
+                ->each(function (array $translation) use (&$merged) {
+                    $key = $this->getFullKey($translation['key'], $translation['namespace']);
+                    if (array_key_exists($key, $merged)) {
+                        $merged[$key]['value'] = $translation['value'];
+                    } else {
+                        $merged[$key] = $translation;
+                    }
+                });
+        }
 
-        return collect(array_values($translations));
+        return collect(array_values($merged));
+    }
+
+    protected function getFullKey(string $key, ?string $namespace = null): string
+    {
+        return (!empty($namespace) ? $namespace.'::' : '').$key;
     }
 
     protected function getDefaultTranslationsForLocale(string $locale): array
@@ -149,31 +163,179 @@ class Manager
                 $group = str_replace('.php', '', $filename);
                 $translations = array_merge(
                     $translations,
-                    Arr::dot($this->translationsLoader->load($locale, $group, $namespace), "$namespace::$group.")
+                    $this->load($locale, $group, $namespace)
                 );
             }
         }
 
-        $directory = App::resourcePath('lang'.DIRECTORY_SEPARATOR.$locale);
+        $directory = "$this->langPath/$locale";
         if (File::exists($directory)) {
             foreach (File::files($directory) as $file) {
                 $filename = $file->getFilename();
                 $group = str_replace('.php', '', $filename);
                 $translations = array_merge(
                     $translations,
-                    Arr::dot($this->translationsLoader->load($locale, $group), "$group.")
+                    $this->load($locale, $group)
                 );
             }
         }
 
         $translations = array_merge(
             $translations,
-            Arr::dot($this->translationsLoader->load($locale, '*', '*'))
+            $this->load($locale, '*', '*')
         );
 
-        return array_filter($translations, function ($value) {
-            return is_string($value);
-        });
+        return array_filter(
+            $translations,
+            function (array $translation) {
+                return is_string($translation['value']);
+            }
+        );
+    }
+
+    protected function load(string $locale, string $group, ?string $namespace = null): array
+    {
+        if ($group === '*' && $namespace === '*') {
+            return $this->loadJsonPaths($locale);
+        }
+
+        if (is_null($namespace) || $namespace === '*') {
+            $translations = $this->loadPath($this->langPath, $locale, $group);
+            return $this->mapTranslations(Arr::dot($translations), self::SOURCE_APP, $group);
+        }
+
+        return $this->mapTranslations(
+            Arr::dot($this->loadNamespaced($locale, $group, $namespace)),
+            self::SOURCE_VENDOR,
+            $group,
+            $namespace
+        );
+    }
+
+    /**
+     * Load a locale from the given JSON file path.
+     *
+     * @param  string  $locale
+     * @return array
+     *
+     * @throws RuntimeException
+     */
+    protected function loadJsonPaths(string $locale)
+    {
+        $output = $this->mapTranslations($this->loadJsonPath($this->langPath, $locale), self::SOURCE_APP, '*');
+
+        foreach ($this->translationsLoader->jsonPaths() as $jsonPath) {
+            $output = array_merge(
+                $output,
+                $this->mapTranslations($this->loadJsonPath($jsonPath, $locale), self::SOURCE_VENDOR, '*')
+            );
+        }
+        return $output;
+    }
+
+    /**
+     * @param  array  $translations
+     * @param  string  $source
+     * @param  string  $group
+     * @param  string|null  $namespace
+     * @return array
+     */
+    protected function mapTranslations(
+        array $translations,
+        string $source,
+        string $group,
+        ?string $namespace = null
+    ) {
+        $result = [];
+
+        foreach ($translations as $key => $value) {
+            $result[] = [
+                'source' => $source,
+                'namespace' => $namespace,
+                'key' => ($group !== '*' ? $group.'.' : '').$key,
+                'value' => $value,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Load a locale from the given JSON file path.
+     *
+     * @param  string  $path
+     * @param  string  $locale
+     * @return array
+     *
+     */
+    protected function loadJsonPath(string $path, string $locale)
+    {
+        if (File::exists($full = "$path/$locale.json")) {
+            $decoded = json_decode(File::get($full), true);
+
+            if (is_null($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+                throw new RuntimeException("Translation file [$full] contains an invalid JSON structure.");
+            }
+
+            return $decoded;
+        }
+        return [];
+    }
+
+    /**
+     * Load a locale from a given path.
+     *
+     * @param  string  $path
+     * @param  string  $locale
+     * @param  string  $group
+     * @return array
+     */
+    protected function loadPath(string $path, string $locale, string $group)
+    {
+        if (File::exists($full = "$path/$locale/$group.php")) {
+            return File::getRequire($full);
+        }
+
+        return [];
+    }
+
+    /**
+     * Load a namespaced translation group.
+     *
+     * @param  string  $locale
+     * @param  string  $group
+     * @param  string  $namespace
+     * @return array
+     */
+    protected function loadNamespaced(string $locale, string $group, string $namespace)
+    {
+        if (isset($this->translationsLoader->namespaces()[$namespace])) {
+            $lines = $this->loadPath($this->translationsLoader->namespaces()[$namespace], $locale, $group);
+
+            return $this->loadNamespaceOverrides($lines, $locale, $group, $namespace);
+        }
+
+        return [];
+    }
+
+    /**
+     * Load a local namespaced translation group for overrides.
+     *
+     * @param  array  $lines
+     * @param  string  $locale
+     * @param  string  $group
+     * @param  string  $namespace
+     * @return array
+     */
+    protected function loadNamespaceOverrides(array $lines, string $locale, string $group, string $namespace)
+    {
+        $file = "$this->path/vendor/$namespace/$locale/$group.php";
+
+        if (File::exists($file)) {
+            return array_replace_recursive($lines, File::getRequire($file));
+        }
+
+        return $lines;
     }
 
     /**
@@ -235,26 +397,6 @@ class Manager
         );
     }
 
-    protected function mergeTranslations(Collection ...$array): Collection
-    {
-        $merged = [];
-
-        foreach ($array as $translations) {
-            $translations
-                ->each(function (array $translation) use (&$merged) {
-                    $key = $this->getFullKey($translation['key'], $translation['namespace']);
-                    $merged[$key] = $translation;
-                });
-        }
-
-        return collect(array_values($merged));
-    }
-
-    protected function getFullKey(string $key, ?string $namespace = null): string
-    {
-        return (!empty($namespace) ? $namespace.'::' : '').$key;
-    }
-
     /**
      * @param  string  $locale
      * @param  string  $file
@@ -266,7 +408,7 @@ class Manager
             throw new InvalidArgumentException("$file is not writable");
         }
 
-        $keys = ['namespace', 'key', 'value'];
+        $keys = ['source', 'namespace', 'key', 'value'];
         fputcsv($handle, $keys);
         foreach ($this->getTranslations($locale) as $translation) {
             fputcsv($handle, Arr::only($translation, $keys));
