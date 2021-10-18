@@ -5,6 +5,7 @@
  * @noinspection PhpRedundantCatchClauseInspection
  * @noinspection PhpUnhandledExceptionInspection
  * @noinspection PhpUnused
+ * @noinspection PhpMultipleClassDeclarationsInspection
  */
 
 namespace SoluzioneSoftware\LaravelTranslations;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use SoluzioneSoftware\LaravelTranslations\Exceptions\SavingException;
+use ValueError;
 
 class Manager
 {
@@ -105,6 +108,7 @@ class Manager
      * @param  string  $locale
      * @param  bool  $initialize
      * @throws InvalidArgumentException if given locale already exists
+     * @throws SavingException if json_encode fails
      */
     public function addLocale(string $locale, bool $initialize = false)
     {
@@ -112,12 +116,40 @@ class Manager
             throw new InvalidArgumentException("Locale $locale already exists");
         }
 
-        $this->save($locale, $initialize ? $this->getDefaultTranslations($locale) : collect());
+        try {
+            $this->save($locale, $initialize ? $this->getDefaultTranslations($locale) : collect());
+        } catch (ValueError $e) {
+            throw new SavingException('', 0, $e);
+        }
     }
 
+    /**
+     * @param  string  $locale
+     * @param  Collection  $translations
+     * @throws ValueError
+     */
     protected function save(string $locale, Collection $translations)
     {
-        $this->disk->put($this->getPath($locale), json_encode($translations->toArray()));
+        $errors = [
+            JSON_ERROR_NONE => 'No error has occurred',
+            JSON_ERROR_DEPTH => 'The maximum stack depth has been exceeded',
+            JSON_ERROR_STATE_MISMATCH => 'Invalid or malformed JSON',
+            JSON_ERROR_CTRL_CHAR => 'Control character error, possibly incorrectly encoded',
+            JSON_ERROR_SYNTAX => 'Syntax error',
+            JSON_ERROR_UTF8 => 'Malformed UTF-8 characters, possibly incorrectly encoded',
+            JSON_ERROR_RECURSION => 'One or more recursive references in the value to be encoded',
+            JSON_ERROR_INF_OR_NAN => 'One or more NAN or INF values in the value to be encoded',
+            JSON_ERROR_UNSUPPORTED_TYPE => 'A value of a type that cannot be encoded was given',
+            JSON_ERROR_INVALID_PROPERTY_NAME => 'A property name that cannot be encoded was given',
+            JSON_ERROR_UTF16 => 'Malformed UTF-16 characters, possibly incorrectly encoded',
+        ];
+
+        $string = json_encode($translations->toArray());
+        if ($string === false) {
+            throw new ValueError($errors[json_last_error()]);
+        }
+
+        $this->disk->put($this->getPath($locale), $string);
     }
 
     public function getDefaultTranslations(string $locale): Collection
@@ -342,6 +374,7 @@ class Manager
      * @param  string  $locale
      * @param  string  $file
      * @throws InvalidArgumentException if given file is not readable
+     * @throws SavingException if json_encode fails
      */
     public function import(string $locale, string $file)
     {
@@ -374,7 +407,11 @@ class Manager
 
         fclose($handle);
 
-        $this->save($locale, $translations);
+        try {
+            $this->save($locale, $translations);
+        } catch (ValueError $e) {
+            throw new SavingException('', 0, $e);
+        }
     }
 
     /**
@@ -382,6 +419,7 @@ class Manager
      * @param  string  $key
      * @param  string  $value
      * @param  string|null  $namespace
+     * @throws SavingException if json_encode fails
      */
     public function updateTranslation(string $locale, string $key, string $value, ?string $namespace = null)
     {
@@ -391,15 +429,19 @@ class Manager
             'value' => $value,
         ];
 
-        $this->save(
-            $locale,
-            $this->mergeTranslations(
-                $this->getTranslations($locale),
-                collect([
-                    $translation,
-                ])
-            )
-        );
+        try {
+            $this->save(
+                $locale,
+                $this->mergeTranslations(
+                    $this->getTranslations($locale),
+                    collect([
+                        $translation,
+                    ])
+                )
+            );
+        } catch (ValueError $e) {
+            throw new SavingException('', 0, $e);
+        }
     }
 
     /**
@@ -422,15 +464,23 @@ class Manager
         fclose($handle);
     }
 
+    /**
+     * @param  string  $locale
+     * @throws SavingException if json_encode fails
+     */
     public function sync(string $locale)
     {
-        $this->save(
-            $locale,
-            $this->mergeTranslations(
-                $this->getDefaultTranslations($locale),
-                $this->getTranslations($locale)
-            )
-        );
+        try {
+            $this->save(
+                $locale,
+                $this->mergeTranslations(
+                    $this->getDefaultTranslations($locale),
+                    $this->getTranslations($locale)
+                )
+            );
+        } catch (ValueError $e) {
+            throw new SavingException('', 0, $e);
+        }
     }
 
     /**
@@ -446,6 +496,7 @@ class Manager
      * @param  string  $key
      * @param  string|null  $namespace
      * @throws InvalidArgumentException if given locale does not exists
+     * @throws SavingException if json_encode fails
      */
     public function removeTranslation(string $locale, string $key, ?string $namespace = null)
     {
@@ -454,6 +505,10 @@ class Manager
                 return $item['key'] !== $key || $item['namespace'] !== $namespace;
             });
 
-        $this->save($locale, $translations);
+        try {
+            $this->save($locale, $translations);
+        } catch (ValueError $e) {
+            throw new SavingException('', 0, $e);
+        }
     }
 }
