@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use SoluzioneSoftware\LaravelTranslations\Exceptions\ImportException;
 use SoluzioneSoftware\LaravelTranslations\Exceptions\SavingException;
 use ValueError;
 
@@ -374,6 +375,7 @@ class Manager
      * @param  string  $locale
      * @param  string  $file
      * @throws InvalidArgumentException if given file is not readable
+     * @throws ImportException if the file has invalid content
      * @throws SavingException if json_encode fails
      */
     public function import(string $locale, string $file)
@@ -390,7 +392,7 @@ class Manager
         $count = 1;
         while (($row = fgetcsv($handle)) !== false) {
             if (count($row) !== 4) {
-                continue;
+                throw new ImportException("$file has invalid number of columns");
             }
 
             if ($count > 1) {
